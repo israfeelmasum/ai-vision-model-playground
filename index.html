@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Vision Playground</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+        * { font-family: 'Inter', sans-serif; }
+        .mono { font-family: 'JetBrains Mono', monospace; }
+        .drop-active { background: rgba(99,102,241,.12); border-color: #6366f1 !important; }
+        .response-area { white-space: pre-wrap; word-break: break-word; }
+        .thinking-dots span { animation: blink 1.4s infinite both; }
+        .thinking-dots span:nth-child(2) { animation-delay: .2s; }
+        .thinking-dots span:nth-child(3) { animation-delay: .4s; }
+        @keyframes blink { 0%,80%,100%{opacity:0} 40%{opacity:1} }
+        .cursor::after { content:'▊'; animation: cblink 1s step-start infinite; }
+        @keyframes cblink { 50%{opacity:0} }
+        ::-webkit-scrollbar { width:6px; }
+        ::-webkit-scrollbar-track { background:transparent; }
+        ::-webkit-scrollbar-thumb { background:#334155; border-radius:3px; }
+        ::-webkit-scrollbar-thumb:hover { background:#475569; }
+        .markdown-body h1,.markdown-body h2,.markdown-body h3 { font-weight:600; margin:.6em 0 .3em; }
+        .markdown-body h1 { font-size:1.3em; }
+        .markdown-body h2 { font-size:1.15em; }
+        .markdown-body h3 { font-size:1.05em; }
+        .markdown-body ul,.markdown-body ol { padding-left:1.4em; margin:.3em 0; }
+        .markdown-body li { margin:.15em 0; }
+        .markdown-body code { font-family:'JetBrains Mono',monospace; background:#0f172a; padding:.1em .35em; border-radius:.25em; font-size:.85em; color:#a5f3fc; }
+        .markdown-body pre { background:#0f172a; padding:.9em 1em; border-radius:.5em; overflow-x:auto; margin:.5em 0; }
+        .markdown-body pre code { background:none; padding:0; color:#e2e8f0; }
+        .markdown-body strong { font-weight:600; color:#f1f5f9; }
+        .markdown-body em { font-style:italic; color:#cbd5e1; }
+        .markdown-body blockquote { border-left:3px solid #6366f1; padding-left:.8em; color:#94a3b8; margin:.4em 0; }
+        .markdown-body hr { border:none; border-top:1px solid #334155; margin:.8em 0; }
+        .markdown-body p { margin:.3em 0; }
+        .markdown-body table { border-collapse:collapse; width:100%; margin:.5em 0; }
+        .markdown-body td,.markdown-body th { border:1px solid #334155; padding:.3em .6em; text-align:left; }
+        .markdown-body th { background:#1e293b; font-weight:600; }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 h-screen flex flex-col overflow-hidden">
+
+    <!-- Header -->
+    <header class="flex-none bg-slate-800 border-b border-slate-700 px-6 py-3 flex items-center justify-between shadow-md">
+        <div class="flex items-center gap-3">
+            <div class="w-8 h-8 bg-indigo-500 rounded-lg flex items-center justify-center font-bold text-sm select-none">V</div>
+            <h1 class="text-lg font-semibold tracking-tight">AI Vision Playground</h1>
+            <span class="text-slate-500 text-sm hidden sm:inline">· Ollama</span>
+        </div>
+        <div class="flex items-center gap-2 cursor-pointer" onclick="loadModels()" title="Click to refresh">
+            <div id="status-dot" class="w-2 h-2 rounded-full bg-yellow-400 animate-pulse"></div>
+            <span id="status-text" class="text-xs text-slate-400">Connecting…</span>
+        </div>
+    </header>
+
+    <!-- Layout -->
+    <div class="flex-1 flex overflow-hidden">
+
+        <!-- Sidebar -->
+        <aside class="w-72 flex-none bg-slate-800 border-r border-slate-700 flex flex-col overflow-y-auto">
+            <div class="p-4 space-y-5">
+
+                <!-- Model -->
+                <div>
+                    <div class="flex items-center justify-between mb-1.5">
+                        <label class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Model</label>
+                        <button onclick="loadModels()" class="text-xs text-slate-500 hover:text-indigo-400 transition-colors">↻ refresh</button>
+                    </div>
+                    <select id="model-select" onchange="updateModelHint()"
+                        class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 transition-colors">
+                        <option value="">Loading models…</option>
+                    </select>
+                    <p id="model-hint" class="mt-1 text-xs text-slate-500 min-h-[1.2em]"></p>
+                </div>
+
+                <!-- System Message -->
+                <div>
+                    <div class="flex items-center justify-between mb-1.5">
+                        <label class="text-xs font-semibold text-slate-400 uppercase tracking-wider">System Message</label>
+                        <button onclick="toggleSystem()" id="sys-toggle" class="text-xs text-slate-500 hover:text-indigo-400 transition-colors">hide</button>
+                    </div>
+                    <div id="sys-area">
+                        <textarea id="system-input" rows="5" placeholder="You are a helpful vision AI…"
+                            class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 resize-none placeholder-slate-500">You are a helpful AI assistant with vision capabilities. Analyze images carefully and provide detailed, accurate responses.</textarea>
+                        <button onclick="document.getElementById('system-input').value=''" class="mt-1 text-xs text-slate-500 hover:text-red-400 transition-colors">clear</button>
+                    </div>
+                </div>
+
+                <div class="border-t border-slate-700"></div>
+
+                <!-- Quick Prompts -->
+                <div>
+                    <label class="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-2">Quick Prompts</label>
+                    <div class="space-y-1.5">
+                        <button onclick="setPrompt('Describe this image in detail.')"
+                            class="w-full text-left text-xs text-slate-400 hover:text-indigo-300 bg-slate-700/40 hover:bg-slate-700 rounded px-2.5 py-2 transition-colors">
+                            Describe image in detail
+                        </button>
+                        <button onclick="setPrompt('What objects can you identify in this image?')"
+                            class="w-full text-left text-xs text-slate-400 hover:text-indigo-300 bg-slate-700/40 hover:bg-slate-700 rounded px-2.5 py-2 transition-colors">
+                            Identify objects
+                        </button>
+                        <button onclick="setPrompt('Extract and transcribe any text visible in this image.')"
+                            class="w-full text-left text-xs text-slate-400 hover:text-indigo-300 bg-slate-700/40 hover:bg-slate-700 rounded px-2.5 py-2 transition-colors">
+                            Extract text (OCR)
+                        </button>
+                        <button onclick="setPrompt('Analyze the mood and emotions depicted in this image.')"
+                            class="w-full text-left text-xs text-slate-400 hover:text-indigo-300 bg-slate-700/40 hover:bg-slate-700 rounded px-2.5 py-2 transition-colors">
+                            Analyze mood / emotions
+                        </button>
+                        <button onclick="setPrompt('What is happening in this image? Provide full context and explanation.')"
+                            class="w-full text-left text-xs text-slate-400 hover:text-indigo-300 bg-slate-700/40 hover:bg-slate-700 rounded px-2.5 py-2 transition-colors">
+                            What is happening?
+                        </button>
+                        <button onclick="setPrompt('Is there anything unusual, concerning, or noteworthy about this image?')"
+                            class="w-full text-left text-xs text-slate-400 hover:text-indigo-300 bg-slate-700/40 hover:bg-slate-700 rounded px-2.5 py-2 transition-colors">
+                            Anything unusual?
+                        </button>
+                    </div>
+                </div>
+
+                <div class="border-t border-slate-700"></div>
+
+                <!-- Backend selector hint -->
+                <div>
+                    <label class="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-2">Backend</label>
+                    <div class="text-xs text-slate-500 space-y-1">
+                        <p>Python (FastAPI): <code class="bg-slate-700 px-1 rounded">:8000</code></p>
+                        <p>Rust (Axum): <code class="bg-slate-700 px-1 rounded">:8001</code></p>
+                    </div>
+                </div>
+
+            </div>
+        </aside>
+
+        <!-- Main -->
+        <main class="flex-1 flex flex-col overflow-hidden">
+            <div class="flex-1 overflow-y-auto p-5 space-y-5">
+
+                <!-- Image Input -->
+                <section>
+                    <label class="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-2">Image Input</label>
+
+                    <!-- Tabs -->
+                    <div class="flex gap-1 mb-3">
+                        <button id="tab-upload" onclick="switchTab('upload')"
+                            class="px-3 py-1.5 text-xs rounded-md font-medium transition-colors bg-indigo-600 text-white">Upload File</button>
+                        <button id="tab-url" onclick="switchTab('url')"
+                            class="px-3 py-1.5 text-xs rounded-md font-medium transition-colors bg-slate-700 text-slate-400 hover:bg-slate-600">Image URL</button>
+                    </div>
+
+                    <!-- Upload Panel -->
+                    <div id="panel-upload">
+                        <div id="drop-zone"
+                            ondragover="event.preventDefault();this.classList.add('drop-active')"
+                            ondragleave="this.classList.remove('drop-active')"
+                            ondrop="handleDrop(event)"
+                            onclick="document.getElementById('file-input').click()"
+                            class="border-2 border-dashed border-slate-600 rounded-xl p-8 text-center cursor-pointer hover:border-indigo-500 hover:bg-slate-800/50 transition-all">
+                            <div class="text-3xl mb-2">📷</div>
+                            <p class="text-sm text-slate-400">Drag &amp; drop an image here</p>
+                            <p class="text-xs text-slate-500 mt-1">or click to browse · PNG, JPG, WEBP, GIF</p>
+                        </div>
+                        <input type="file" id="file-input" accept="image/*" onchange="handleFileSelect(event)" class="hidden">
+                    </div>
+
+                    <!-- URL Panel -->
+                    <div id="panel-url" class="hidden">
+                        <div class="flex gap-2">
+                            <input type="url" id="url-input" placeholder="https://example.com/image.jpg"
+                                class="flex-1 bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 placeholder-slate-500"
+                                onkeydown="if(event.key==='Enter')loadImageFromURL()">
+                            <button onclick="loadImageFromURL()"
+                                class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg text-sm font-medium transition-colors">Load</button>
+                        </div>
+                    </div>
+
+                    <!-- Preview -->
+                    <div id="image-preview" class="hidden mt-3">
+                        <div class="relative inline-block">
+                            <img id="preview-img" class="max-h-52 rounded-lg border border-slate-600 object-contain" alt="Preview">
+                            <button onclick="clearImage()"
+                                class="absolute -top-2 -right-2 w-5 h-5 bg-red-500 hover:bg-red-400 rounded-full text-xs flex items-center justify-center leading-none font-bold transition-colors">×</button>
+                        </div>
+                        <p id="image-info" class="text-xs text-slate-500 mt-1"></p>
+                    </div>
+                </section>
+
+                <!-- Prompt -->
+                <section>
+                    <label class="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-2">Prompt</label>
+                    <textarea id="prompt-input" rows="3"
+                        placeholder="Ask about the image, or just chat…"
+                        onkeydown="if(event.key==='Enter'&&event.ctrlKey){event.preventDefault();sendMessage()}"
+                        class="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-indigo-500 resize-none placeholder-slate-500"></textarea>
+                    <div class="flex items-center justify-between mt-2">
+                        <span class="text-xs text-slate-600">Ctrl+Enter to send</span>
+                        <div class="flex gap-2">
+                            <button onclick="clearAll()"
+                                class="px-3 py-1.5 text-xs text-slate-400 hover:text-red-400 border border-slate-700 hover:border-red-700 rounded-lg transition-colors">Clear all</button>
+                            <button onclick="sendMessage()" id="send-btn"
+                                class="px-5 py-1.5 text-sm font-medium bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-600 disabled:text-slate-500 rounded-lg transition-colors flex items-center gap-2">
+                                <span>Send</span>
+                            </button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Response -->
+                <section id="response-container" class="hidden">
+                    <div class="flex items-center justify-between mb-2">
+                        <label class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Response</label>
+                        <div class="flex items-center gap-3">
+                            <span id="resp-meta" class="text-xs text-slate-500 hidden mono"></span>
+                            <button onclick="copyResponse()" class="text-xs text-slate-500 hover:text-indigo-400 transition-colors">copy</button>
+                        </div>
+                    </div>
+                    <div class="bg-slate-800 border border-slate-700 rounded-xl p-5 text-sm leading-relaxed min-h-[80px]">
+                        <div id="thinking" class="flex items-center gap-2 text-slate-400">
+                            <span class="text-indigo-400 text-sm">Thinking</span>
+                            <span class="thinking-dots text-indigo-400"><span>.</span><span>.</span><span>.</span></span>
+                        </div>
+                        <div id="response-text" class="response-area text-slate-200 markdown-body hidden"></div>
+                    </div>
+                </section>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" class="fixed bottom-4 right-4 px-4 py-2.5 rounded-lg text-sm shadow-xl z-50 transition-all duration-300 opacity-0 translate-y-4 pointer-events-none"></div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+let imgFile = null, imgURL = null, isStreaming = false, fullResponse = '', sysVisible = true;
+
+const VISION_KEYWORDS = ['llava','moondream','qwen2-vl','qwen2.5vl','gemma3','minicpm-v','bakllava','llava-phi3','llava-llama3'];
+const isVisionModel = name => VISION_KEYWORDS.some(k => name.toLowerCase().includes(k));
+
+// ── Init ───────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => { loadModels(); });
+
+// ── Models ─────────────────────────────────────────────────────────────────
+async function loadModels() {
+    const sel = document.getElementById('model-select');
+    sel.innerHTML = '<option value="">Loading…</option>';
+    setStatus('yellow', 'Connecting…');
+    try {
+        const data = await fetch('/api/models').then(r => r.json());
+        if (data.error && !data.models?.length) {
+            sel.innerHTML = '<option value="">No models found</option>';
+            setStatus('red', 'Ollama not connected');
+            showToast(data.error, 'error');
+            return;
+        }
+        sel.innerHTML = '';
+        const vision = data.models.filter(m => m.vision);
+        const text   = data.models.filter(m => !m.vision);
+        if (vision.length) {
+            const g = document.createElement('optgroup');
+            g.label = '👁 Vision Models';
+            vision.forEach(m => addOption(g, m.name));
+            sel.appendChild(g);
+        }
+        if (text.length) {
+            const g = document.createElement('optgroup');
+            g.label = '💬 Text Models';
+            text.forEach(m => addOption(g, m.name));
+            sel.appendChild(g);
+        }
+        if (!data.models.length) sel.innerHTML = '<option value="">No models installed</option>';
+        setStatus('green', `${data.models.length} model${data.models.length !== 1 ? 's' : ''} ready`);
+        updateModelHint();
+    } catch(e) {
+        sel.innerHTML = '<option value="">Error</option>';
+        setStatus('red', 'Error');
+        showToast('Failed to load models — is Ollama running?', 'error');
+    }
+}
+
+function addOption(parent, name) {
+    const o = document.createElement('option');
+    o.value = o.textContent = name;
+    parent.appendChild(o);
+}
+
+function updateModelHint() {
+    const sel = document.getElementById('model-select');
+    const hint = document.getElementById('model-hint');
+    if (!sel.value) { hint.textContent = ''; return; }
+    const vision = isVisionModel(sel.value);
+    hint.textContent = vision ? '✓ Supports image input' : '⚠ Text-only — image will be ignored';
+    hint.className = `mt-1 text-xs ${vision ? 'text-green-500' : 'text-yellow-500'}`;
+}
+
+function setStatus(color, text) {
+    const colors = { green:'bg-green-500', yellow:'bg-yellow-400 animate-pulse', red:'bg-red-500' };
+    document.getElementById('status-dot').className = `w-2 h-2 rounded-full ${colors[color]}`;
+    document.getElementById('status-text').textContent = text;
+}
+
+// ── Tabs ───────────────────────────────────────────────────────────────────
+function switchTab(tab) {
+    const active   = 'px-3 py-1.5 text-xs rounded-md font-medium transition-colors bg-indigo-600 text-white';
+    const inactive = 'px-3 py-1.5 text-xs rounded-md font-medium transition-colors bg-slate-700 text-slate-400 hover:bg-slate-600';
+    document.getElementById('tab-upload').className = tab === 'upload' ? active : inactive;
+    document.getElementById('tab-url').className    = tab === 'url'    ? active : inactive;
+    document.getElementById('panel-upload').classList.toggle('hidden', tab !== 'upload');
+    document.getElementById('panel-url').classList.toggle('hidden',    tab !== 'url');
+    clearImage();
+}
+
+// ── Image ──────────────────────────────────────────────────────────────────
+function handleDrop(e) {
+    e.preventDefault();
+    document.getElementById('drop-zone').classList.remove('drop-active');
+    const f = e.dataTransfer.files[0];
+    if (f && f.type.startsWith('image/')) setImageFile(f);
+    else showToast('Please drop an image file', 'error');
+}
+
+function handleFileSelect(e) { if (e.target.files[0]) setImageFile(e.target.files[0]); }
+
+function setImageFile(f) {
+    imgFile = f; imgURL = null;
+    const r = new FileReader();
+    r.onload = ev => showPreview(ev.target.result, `${f.name}  (${fmtBytes(f.size)})`);
+    r.readAsDataURL(f);
+}
+
+async function loadImageFromURL() {
+    const url = document.getElementById('url-input').value.trim();
+    if (!url) return;
+    imgURL = url; imgFile = null;
+    showPreview(url, url);
+}
+
+function showPreview(src, info) {
+    document.getElementById('preview-img').src = src;
+    document.getElementById('image-info').textContent = info;
+    document.getElementById('image-preview').classList.remove('hidden');
+}
+
+function clearImage() {
+    imgFile = imgURL = null;
+    document.getElementById('image-preview').classList.add('hidden');
+    document.getElementById('preview-img').src = '';
+    document.getElementById('file-input').value = '';
+    document.getElementById('url-input').value = '';
+}
+
+function fmtBytes(b) {
+    if (b < 1024) return b + ' B';
+    if (b < 1048576) return (b/1024).toFixed(1) + ' KB';
+    return (b/1048576).toFixed(1) + ' MB';
+}
+
+// ── System ─────────────────────────────────────────────────────────────────
+function toggleSystem() {
+    sysVisible = !sysVisible;
+    document.getElementById('sys-area').classList.toggle('hidden', !sysVisible);
+    document.getElementById('sys-toggle').textContent = sysVisible ? 'hide' : 'show';
+}
+
+// ── Quick prompts ──────────────────────────────────────────────────────────
+function setPrompt(t) {
+    document.getElementById('prompt-input').value = t;
+    document.getElementById('prompt-input').focus();
+}
+
+// ── Send ───────────────────────────────────────────────────────────────────
+async function sendMessage() {
+    if (isStreaming) return;
+    const model  = document.getElementById('model-select').value;
+    const prompt = document.getElementById('prompt-input').value.trim();
+    const system = document.getElementById('system-input').value.trim();
+    if (!model)  { showToast('Select a model first', 'error'); return; }
+    if (!prompt && !imgFile && !imgURL) { showToast('Enter a prompt or load an image', 'error'); return; }
+
+    isStreaming = true; fullResponse = '';
+    setBtnLoading(true);
+
+    const container = document.getElementById('response-container');
+    const thinking  = document.getElementById('thinking');
+    const respEl    = document.getElementById('response-text');
+    const metaEl    = document.getElementById('resp-meta');
+
+    container.classList.remove('hidden');
+    thinking.classList.remove('hidden');
+    respEl.classList.add('hidden');
+    respEl.innerHTML = '';
+    respEl.className = 'response-area text-slate-200 markdown-body hidden';
+    metaEl.classList.add('hidden');
+
+    const fd = new FormData();
+    fd.append('model', model);
+    fd.append('prompt', prompt || 'Describe this image.');
+    fd.append('system', system);
+    if (imgFile) fd.append('image', imgFile);
+    if (imgURL)  fd.append('image_url', imgURL);
+
+    try {
+        const resp = await fetch('/api/chat', { method: 'POST', body: fd });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+        const reader = resp.body.getReader();
+        const dec = new TextDecoder();
+        let buf = '', started = false;
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buf += dec.decode(value, { stream: true });
+            const lines = buf.split('\n');
+            buf = lines.pop();
+            for (const line of lines) {
+                if (!line.trim()) continue;
+                try {
+                    const d = JSON.parse(line);
+                    if (d.message?.content) {
+                        if (!started) {
+                            thinking.classList.add('hidden');
+                            respEl.classList.remove('hidden');
+                            respEl.classList.add('cursor');
+                            started = true;
+                        }
+                        fullResponse += d.message.content;
+                        respEl.innerHTML = renderMarkdown(fullResponse);
+                        respEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    }
+                    if (d.done) {
+                        respEl.classList.remove('cursor');
+                        if (d.total_duration) {
+                            const sec = (d.total_duration / 1e9).toFixed(1);
+                            const tok = d.eval_count ?? 0;
+                            metaEl.textContent = `${model} · ${sec}s · ${tok} tokens`;
+                            metaEl.classList.remove('hidden');
+                        }
+                    }
+                } catch(_) {}
+            }
+        }
+        if (!started) {
+            thinking.classList.add('hidden');
+            respEl.classList.remove('hidden');
+            respEl.textContent = '(No response)';
+        }
+    } catch(e) {
+        thinking.classList.add('hidden');
+        respEl.classList.remove('hidden');
+        respEl.className = 'response-area text-red-400';
+        respEl.textContent = `Error: ${e.message}`;
+        showToast('Request failed: ' + e.message, 'error');
+    } finally {
+        isStreaming = false;
+        setBtnLoading(false);
+        respEl.classList.remove('cursor');
+    }
+}
+
+function setBtnLoading(on) {
+    const btn = document.getElementById('send-btn');
+    btn.disabled = on;
+    btn.innerHTML = on
+        ? `<svg class="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg><span>Generating…</span>`
+        : '<span>Send</span>';
+}
+
+// ── Clear ──────────────────────────────────────────────────────────────────
+function clearAll() {
+    document.getElementById('prompt-input').value = '';
+    document.getElementById('response-container').classList.add('hidden');
+    document.getElementById('response-text').innerHTML = '';
+    clearImage();
+    fullResponse = '';
+}
+
+// ── Copy ───────────────────────────────────────────────────────────────────
+function copyResponse() {
+    if (!fullResponse) return;
+    navigator.clipboard.writeText(fullResponse).then(() => showToast('Copied!'));
+}
+
+// ── Markdown renderer (no dep, lightweight) ───────────────────────────────
+function renderMarkdown(text) {
+    let h = text
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+        // code blocks
+        .replace(/```[\w]*\n([\s\S]*?)```/g, (_,c) => `<pre><code>${c.trimEnd()}</code></pre>`)
+        // inline code
+        .replace(/`([^`]+)`/g, '<code>$1</code>')
+        // headings
+        .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+        .replace(/^## (.+)$/gm,  '<h2>$1</h2>')
+        .replace(/^# (.+)$/gm,   '<h1>$1</h1>')
+        // bold / italic
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.+?)\*/g,     '<em>$1</em>')
+        // hr
+        .replace(/^---$/gm, '<hr>')
+        // blockquote
+        .replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
+        // unordered list
+        .replace(/^\s*[-*+] (.+)$/gm, '<li>$1</li>')
+        // ordered list
+        .replace(/^\s*\d+\. (.+)$/gm, '<li>$1</li>')
+        // paragraphs
+        .replace(/\n{2,}/g, '</p><p>')
+        .replace(/\n/g, '<br>');
+    return `<p>${h}</p>`;
+}
+
+// ── Toast ──────────────────────────────────────────────────────────────────
+let _toastTimer;
+function showToast(msg, type = 'info') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = `fixed bottom-4 right-4 px-4 py-2.5 rounded-lg text-sm shadow-xl z-50 transition-all duration-300 ${
+        type === 'error' ? 'bg-red-700 text-white' : 'bg-slate-700 text-slate-100'
+    }`;
+    t.style.opacity = '1'; t.style.transform = 'translateY(0)';
+    clearTimeout(_toastTimer);
+    _toastTimer = setTimeout(() => {
+        t.style.opacity = '0'; t.style.transform = 'translateY(1rem)';
+    }, 3500);
+}
+</script>
+</body>
+</html>
