@@ -24,6 +24,7 @@ const OLLAMA: &str = "http://localhost:11434";
 const VISION_KEYWORDS: &[&str] = &[
     "llava", "moondream", "qwen2-vl", "qwen2.5vl",
     "gemma3", "minicpm-v", "bakllava", "llava-phi3", "llava-llama3",
+    "llama3.2-vision", "llama3.2vision",
 ];
 
 fn is_vision(name: &str) -> bool {

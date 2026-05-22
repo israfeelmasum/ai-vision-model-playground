@@ -28,6 +28,7 @@ OLLAMA_BASE = "http://localhost:11434"
 VISION_KEYWORDS = (
     "llava", "moondream", "qwen2-vl", "qwen2.5vl",
     "gemma3", "minicpm-v", "bakllava", "llava-phi3", "llava-llama3",
+    "llama3.2-vision", "llama3.2vision",
 )
 
 
